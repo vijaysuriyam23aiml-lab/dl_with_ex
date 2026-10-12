@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gradient Descent Lab — Interactive Optimization Visualizer</title>
+  <meta name="description" content="Interactive 3D visualization of SGD, Momentum, and Adam navigating non-convex loss landscapes." />
+  <style>
+    :root{
+      --bg:#07111f;
+      --panel:#0d1a2b;
+      --panel2:#102238;
+      --text:#edf5ff;
+      --muted:#9db0c8;
+      --line:#223954;
+      --cyan:#4cc9f0;
+      --green:#55d187;
+      --orange:#ffb454;
+      --pink:#ff6b9d;
+      --danger:#ff7b7b;
+      --shadow:0 20px 60px rgba(0,0,0,.28);
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:
+        radial-gradient(circle at 20% 0%,rgba(76,201,240,.12),transparent 30%),
+        radial-gradient(circle at 90% 10%,rgba(85,209,135,.08),transparent 28%),
+        var(--bg);
+      color:var(--text);
+      line-height:1.55;
+    }
+    a{color:inherit}
+    .container{width:min(1180px,calc(100% - 32px));margin:auto}
+    .nav{
+      position:sticky;top:0;z-index:20;
+      backdrop-filter:blur(16px);
+      background:rgba(7,17,31,.82);
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    .nav-inner{height:70px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+    .brand{font-weight:800;letter-spacing:-.02em}
+    .brand span{color:var(--cyan)}
+    .nav-links{display:flex;gap:22px;align-items:center;font-size:14px;color:var(--muted)}
+    .nav-links a{text-decoration:none}
+    .nav-links a:hover{color:var(--text)}
+    .btn{
+      border:1px solid var(--line);
+      background:var(--panel2);
+      color:var(--text);
+      border-radius:10px;
+      padding:10px 15px;
+      cursor:pointer;
+      font-weight:700;
+      min-height:42px;
+    }
+    .btn:hover{filter:brightness(1.12)}
+    .btn.primary{background:linear-gradient(135deg,#2499c5,#43b9dd);color:#04101a;border-color:transparent}
+    .btn.danger{background:rgba(255,123,123,.12);color:#ffd1d1;border-color:rgba(255,123,123,.3)}
+    .hero{padding:72px 0 46px}
+    .eyebrow{
+      display:inline-flex;gap:8px;align-items:center;
+      border:1px solid rgba(76,201,240,.25);
+      background:rgba(76,201,240,.08);
+      color:#bcecff;border-radius:999px;padding:7px 11px;
+      font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;
+    }
+    h1{font-size:clamp(42px,7vw,76px);line-height:.98;letter-spacing:-.055em;margin:20px 0 20px;max-width:850px}
+    .gradient{background:linear-gradient(90deg,#fff,#7bdfff 48%,#79e6a5);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .hero p{font-size:19px;color:var(--muted);max-width:750px;margin:0}
+    .hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}
+    .section{padding:62px 0}
+    .section-title{font-size:34px;letter-spacing:-.035em;margin:0 0 10px}
+    .section-subtitle{color:var(--muted);max-width:760px;margin:0 0 26px}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .card{
+      background:linear-gradient(180deg,rgba(16,34,56,.94),rgba(13,26,43,.94));
+      border:1px solid var(--line);
+      border-radius:16px;padding:20px;
+      box-shadow:var(--shadow);
+    }
+    .card h3{margin:8px 0;font-size:19px}
+    .card p{color:var(--muted);margin:0}
+    .icon{font-size:28px}
+    .visualizer{
+      display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;
+      align-items:stretch;
+    }
+    .canvas-wrap{
+      min-height:610px;background:#050b14;border:1px solid var(--line);border-radius:16px;overflow:hidden;position:relative;
+      box-shadow:var(--shadow);
+    }
+    #scene{width:100%;height:610px;display:block}
+    .legend{
+      position:absolute;left:18px;top:18px;
+      background:rgba(5,11,20,.78);border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;padding:11px 13px;font-size:12px;color:var(--muted)
+    }
+    .legend div{display:flex;align-items:center;gap:8px;margin:5px 0}
+    .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+    .controls{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px}
+    .controls h3{margin:0 0 18px}
+    .control-group{margin-bottom:20px}
+    label{display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:700;margin-bottom:8px}
+    select,input[type=range]{width:100%}
+    select{
+      background:#0a1728;color:var(--text);border:1px solid var(--line);border-radius:9px;
+      padding:11px;font-size:14px;
+    }
+    input[type=range]{accent-color:var(--cyan)}
+    .check{
+      display:flex;align-items:center;gap:10px;margin:9px 0;color:var(--muted);font-size:14px
+    }
+    .check input{accent-color:var(--cyan)}
+    .button-row{display:flex;gap:8px;flex-wrap:wrap}
+    .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px}
+    .stat{border:1px solid var(--line);background:#091728;border-radius:10px;padding:10px}
+    .stat small{display:block;color:var(--muted);font-size:11px}
+    .stat strong{font-size:16px}
+    .note{font-size:12px;color:var(--muted);margin-top:14px}
+    .chart-card{margin-top:16px}
+    #lossChart{width:100%;height:220px;display:block;background:#07111d;border:1px solid var(--line);border-radius:12px}
+    .formula{
+      background:#07111d;border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+      font-family:"SFMono-Regular",Consolas,monospace;color:#c9f4ff;overflow:auto
+    }
+    .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;counter-reset:step}
+    .function-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+    .function-card{background:linear-gradient(180deg,rgba(16,34,56,.94),rgba(13,26,43,.94));border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:var(--shadow)}
+    .function-card h3{margin:0 0 10px;font-size:20px;color:var(--text)}
+    .function-card p{margin:8px 0;color:var(--muted)}
+    .function-card strong{color:#cbeeff}
+    .function-card .formula{margin-top:12px;font-size:13px}
+    .step{position:relative;padding:20px;border:1px solid var(--line);border-radius:14px;background:rgba(13,26,43,.72)}
+    .step-number{font-size:12px;color:var(--cyan);font-weight:900;text-transform:uppercase}
+    .step h3{margin:7px 0}
+    .step p{margin:0;color:var(--muted);font-size:14px}
+    .compare{overflow-x:auto;border:1px solid var(--line);border-radius:14px}
+    table{width:100%;border-collapse:collapse;min-width:720px}
+    th,td{text-align:left;padding:14px;border-bottom:1px solid var(--line)}
+    th{background:#0b1a2c;font-size:13px}
+    td{color:var(--muted);font-size:14px}
+    td:first-child{color:var(--text);font-weight:800}
+    .callout{
+      border:1px solid rgba(76,201,240,.25);background:rgba(76,201,240,.07);
+      border-radius:14px;padding:18px 20px;color:#cbeeff
+    }
+    footer{padding:45px 0;border-top:1px solid rgba(255,255,255,.07);color:var(--muted)}
+    .footer-row{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+    @media(max-width:950px){
+      .visualizer{grid-template-columns:1fr}
+      .canvas-wrap,#scene{min-height:520px;height:520px}
+      .cards,.steps{grid-template-columns:1fr 1fr}
+      .function-grid{grid-template-columns:1fr}
+      .nav-links{display:none}
+    }
+    @media(max-width:600px){
+      .container{width:min(100% - 20px,1180px)}
+      .hero{padding-top:45px}
+      .cards,.steps,.function-grid{grid-template-columns:1fr}
+      .canvas-wrap,#scene{height:430px;min-height:430px}
+      h1{font-size:45px}
+      .section{padding:45px 0}
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="container nav-inner">
+      <div class="brand">Gradient<span>Descent</span> Lab</div>
+      <div class="nav-links">
+        <a href="#learn">Learn</a>
+        <a href="#visualizer">Visualizer</a>
+        <a href="#functions">Test Functions</a>
+        <a href="#compare">Compare</a>
+        <a href="#about">About</a>
+      </div>
+      <a class="btn" href="#visualizer">Launch Lab</a>
+    </div>
+  </nav>
+
+  <header class="hero container">
+    <div class="eyebrow">Interactive ML • Optimization • 3D Visualization</div>
+    <h1>See how optimizers <span class="gradient">learn their way downhill.</span></h1>
+    <p>
+      Explore a 3D loss landscape and watch SGD, Momentum, and Adam search for low-loss regions.
+      Change the surface, learning rate, starting point, and speed — then compare their paths.
+    </p>
+    <div class="hero-actions">
+      <a class="btn primary" href="#visualizer">Start Experiment</a>
+      <a class="btn" href="#learn">Understand the idea</a>
+    </div>
+  </header>
+
+  <main>
+    <section id="learn" class="section container">
+      <h2 class="section-title">What problem does this solve?</h2>
+      <p class="section-subtitle">
+        Optimization is often taught as equations. This project turns those equations into something you can see,
+        touch, and experiment with.
+      </p>
+      <div class="cards">
+        <article class="card">
+          <div class="icon">🏔️</div>
+          <h3>See the loss</h3>
+          <p>A loss function becomes a 3D landscape. High areas mean high loss; valleys represent lower-loss regions.</p>
+        </article>
+        <article class="card">
+          <div class="icon">🧭</div>
+          <h3>See the gradient</h3>
+          <p>The gradient describes the uphill direction. Gradient-based optimizers move in the opposite direction.</p>
+        </article>
+        <article class="card">
+          <div class="icon">🤖</div>
+          <h3>Compare algorithms</h3>
+          <p>Watch SGD, Momentum, and Adam take different paths across the same mathematical landscape.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="visualizer" class="section container">
+      <h2 class="section-title">3D Optimization Lab</h2>
+      <p class="section-subtitle">Drag the scene to rotate it. Scroll to zoom. Change controls and press Reset to start a new experiment.</p>
+
+      <div class="visualizer">
+        <div class="canvas-wrap">
+          <div id="scene"></div>
+          <div class="legend">
+            <div><span class="dot" style="background:#4cc9f0"></span> SGD</div>
+            <div><span class="dot" style="background:#ffb454"></span> Momentum</div>
+            <div><span class="dot" style="background:#55d187"></span> Adam</div>
+            <div style="margin-top:8px">● = current position</div>
+          </div>
+        </div>
+
+        <aside class="controls">
+          <h3>Experiment controls</h3>
+
+          <div class="control-group">
+            <label for="surface">Loss surface</label>
+            <select id="surface">
+              <option value="rosenbrock">Rosenbrock Valley</option>
+              <option value="himmelblau">Himmelblau</option>
+              <option value="rastrigin">Rastrigin</option>
+              <option value="ackley">Ackley</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>Optimizers</label>
+            <label class="check"><input type="checkbox" id="sgd" checked> SGD</label>
+            <label class="check"><input type="checkbox" id="momentum" checked> Momentum</label>
+            <label class="check"><input type="checkbox" id="adam" checked> Adam</label>
+          </div>
+
+          <div class="control-group">
+            <label for="learningRate">Learning rate <span id="lrValue">0.010</span></label>
+            <input id="learningRate" type="range" min="0.001" max="0.08" value="0.010" step="0.001">
+          </div>
+
+          <div class="control-group">
+            <label for="startX">Start X <span id="xValue">-1.50</span></label>
+            <input id="startX" type="range" min="-2.8" max="2.8" value="-1.5" step="0.1">
+          </div>
+
+          <div class="control-group">
+            <label for="startY">Start Y <span id="yValue">1.50</span></label>
+            <input id="startY" type="range" min="-2.8" max="2.8" value="1.5" step="0.1">
+          </div>
+
+          <div class="control-group">
+            <label for="speed">Animation speed <span id="speedValue">1×</span></label>
+            <input id="speed" type="range" min="1" max="10" value="3" step="1">
+          </div>
+
+          <div class="button-row">
+            <button class="btn primary" id="playBtn">Pause</button>
+            <button class="btn" id="stepBtn">One step</button>
+            <button class="btn danger" id="resetBtn">Reset</button>
+          </div>
+
+          <div class="stats">
+            <div class="stat"><small>Iteration</small><strong id="iteration">0</strong></div>
+            <div class="stat"><small>Best visible loss</small><strong id="bestLoss">—</strong></div>
+            <div class="stat"><small>SGD loss</small><strong id="sgdLoss">—</strong></div>
+            <div class="stat"><small>Momentum loss</small><strong id="momentumLoss">—</strong></div>
+            <div class="stat"><small>Adam loss</small><strong id="adamLoss">—</strong></div>
+            <div class="stat"><small>Surface</small><strong id="surfaceName">Rosenbrock</strong></div>
+          </div>
+
+          <div class="note">
+            Tip: increase the learning rate and watch how large steps can overshoot or oscillate.
+          </div>
+        </aside>
+      </div>
+
+      <div class="card chart-card">
+        <h3 style="margin-top:0">Loss vs. iteration</h3>
+        <canvas id="lossChart" width="1000" height="220"></canvas>
+      </div>
+    </section>
+
+    <section id="functions" class="section container">
+      <h2 class="section-title">Understand the four test functions</h2>
+      <p class="section-subtitle">
+        These are benchmark loss functions, not learning algorithms. We use them to test how well optimizers such as SGD,
+        Momentum, and Adam search for low values. Each surface has a different challenge, so comparing them helps us understand
+        where an optimizer works well and where it may struggle.
+      </p>
+      <div class="function-grid">
+        <article class="function-card">
+          <h3>1. Rosenbrock Valley</h3>
+          <p><strong>What it is:</strong> A smooth function with a long, narrow, curved valley. Its global minimum is at (1, 1), where the loss is 0.</p>
+          <p><strong>How it behaves:</strong> The optimizer must follow the bend in the valley. The steep sides and gentle direction along the valley can make progress slow or cause zig-zagging.</p>
+          <p><strong>When we use it:</strong> To test whether an optimizer can navigate narrow curved valleys and converge accurately instead of overshooting or moving slowly.</p>
+          <p><strong>In simple words:</strong> Imagine walking down a winding, narrow valley. The challenge is to follow the curve all the way to the bottom.</p>
+          <div class="formula">f(x,y) = (1 − x)² + 100(y − x²)²</div>
+        </article>
+        <article class="function-card">
+          <h3>2. Himmelblau’s Function</h3>
+          <p><strong>What it is:</strong> A two-dimensional function with four different global minimum points, each having a loss of 0.</p>
+          <p><strong>How it behaves:</strong> The starting position can influence which minimum an optimizer reaches. Different runs can end in different valleys, even when each reaches a good solution.</p>
+          <p><strong>When we use it:</strong> To compare how optimizers explore a landscape with multiple good solutions and to observe how the starting point affects the result.</p>
+          <p><strong>In simple words:</strong> Picture a landscape with four equally deep valleys. Where you start can determine which valley you reach.</p>
+          <div class="formula">f(x,y) = (x² + y − 11)² + (x + y² − 7)²</div>
+        </article>
+        <article class="function-card">
+          <h3>3. Rastrigin Function</h3>
+          <p><strong>What it is:</strong> A highly bumpy, repeating function with many local minima. Its global minimum is at (0, 0), where the loss is 0.</p>
+          <p><strong>How it behaves:</strong> The many small valleys can attract an optimizer before it finds the deepest one. An optimizer may settle at a local minimum rather than the global minimum.</p>
+          <p><strong>When we use it:</strong> To test an optimizer’s ability to explore the search space and avoid getting trapped in local minima.</p>
+          <p><strong>In simple words:</strong> Imagine searching for the deepest dip in a field full of small dips and bumps.</p>
+          <div class="formula">f(x,y) = 20 + x² + y² − 10[cos(2πx) + cos(2πy)]</div>
+        </article>
+        <article class="function-card">
+          <h3>4. Ackley Function</h3>
+          <p><strong>What it is:</strong> A benchmark function with a broad outer region and a rippled landscape surrounding its global minimum at (0, 0), where the loss is 0.</p>
+          <p><strong>How it behaves:</strong> The relatively flat outer area can provide weak directional information, while the ripples create smaller variations that can complicate the search.</p>
+          <p><strong>When we use it:</strong> To compare how well optimizers move across flat regions, handle local variations, and converge toward the global minimum.</p>
+          <p><strong>In simple words:</strong> Think of walking over a broad, almost flat area with ripples, trying to reach the lowest point in the center.</p>
+          <div class="formula">f(x,y) = −20e<sup>−0.2√(0.5(x²+y²))</sup> − e<sup>0.5(cos(2πx)+cos(2πy))</sup> + e + 20</div>
+        </article>
+      </div>
+      <div class="callout" style="margin-top:18px">
+        <strong>How to use this section:</strong> Choose a surface in the experiment controls, then watch SGD, Momentum, and Adam move across it.
+        Compare their paths and loss values. The best result depends on the surface, starting point, and learning rate.
+      </div>
+    </section>
+
+    <section class="section container">
+      <h2 class="section-title">How the optimizer works</h2>
+      <p class="section-subtitle">Every iteration repeats the same basic idea: measure the slope, move downhill, repeat.</p>
+      <div class="steps">
+        <article class="step"><div class="step-number">Step 01</div><h3>Calculate loss</h3><p>Evaluate the current point on the chosen loss function.</p></article>
+        <article class="step"><div class="step-number">Step 02</div><h3>Calculate gradient</h3><p>Estimate which direction goes uphill using partial derivatives.</p></article>
+        <article class="step"><div class="step-number">Step 03</div><h3>Update position</h3><p>Move in the opposite direction, scaled by the learning rate.</p></article>
+        <article class="step"><div class="step-number">Step 04</div><h3>Repeat</h3><p>Keep updating until the optimizer reaches a low-loss region or the experiment ends.</p></article>
+      </div>
+      <div class="callout" style="margin-top:18px">
+        <strong>Core idea:</strong> θ<sub>new</sub> = θ<sub>old</sub> − learning&nbsp;rate × gradient.
+        Momentum adds a velocity-like memory, while Adam adapts the step using running statistics of gradients.
+      </div>
+    </section>
+
+    <section id="compare" class="section container">
+      <h2 class="section-title">Optimizer comparison</h2>
+      <p class="section-subtitle">These are descriptive differences, not a universal ranking. Behavior depends on the loss surface and hyperparameters.</p>
+      <div class="compare">
+        <table>
+          <thead><tr><th>Optimizer</th><th>Main idea</th><th>What you can observe</th><th>Key control</th></tr></thead>
+          <tbody>
+            <tr><td>SGD</td><td>Move directly opposite the gradient.</td><td>Simple paths; can zig-zag in narrow valleys.</td><td>Learning rate</td></tr>
+            <tr><td>Momentum</td><td>Accumulate directional velocity.</td><td>Can smooth movement and build speed along consistent directions.</td><td>Learning rate + momentum</td></tr>
+            <tr><td>Adam</td><td>Use running first/second gradient statistics.</td><td>Adaptive step sizes across coordinates.</td><td>Learning rate + β values</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="about" class="section container">
+      <h2 class="section-title">Project presentation</h2>
+      <p class="section-subtitle">
+        This is an educational visualization project. It is useful for explaining why optimization matters when training
+        machine-learning models: model parameters are adjusted repeatedly to reduce a loss function.
+      </p>
+      <div class="cards">
+        <article class="card"><h3>Problem</h3><p>Optimization concepts are abstract when shown only as formulas or logs.</p></article>
+        <article class="card"><h3>Solution</h3><p>An interactive 3D lab makes the loss surface and optimizer trajectories visible.</p></article>
+        <article class="card"><h3>Technology</h3><p>HTML, CSS, JavaScript, and Three.js. No backend is required for this demo.</p></article>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-row">
+      <div><strong>Gradient Descent Lab</strong><br><span>Interactive optimization visualization</span></div>
+      <div>Built for learning • Experiment • Observe • Understand</div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script>
+    (() => {
+      "use strict";
+
+      const container = document.getElementById("scene");
+      const chart = document.getElementById("lossChart");
+      const ctx = chart.getContext("2d");
+
+      const ui = {
+        surface: document.getElementById("surface"),
+        sgd: document.getElementById("sgd"),
+        momentum: document.getElementById("momentum"),
+        adam: document.getElementById("adam"),
+        lr: document.getElementById("learningRate"),
+        startX: document.getElementById("startX"),
+        startY: document.getElementById("startY"),
+        speed: document.getElementById("speed"),
+        lrValue: document.getElementById("lrValue"),
+        xValue: document.getElementById("xValue"),
+        yValue: document.getElementById("yValue"),
+        speedValue: document.getElementById("speedValue"),
+        play: document.getElementById("playBtn"),
+        step: document.getElementById("stepBtn"),
+        reset: document.getElementById("resetBtn"),
+        iteration: document.getElementById("iteration"),
+        bestLoss: document.getElementById("bestLoss"),
+        sgdLoss: document.getElementById("sgdLoss"),
+        momentumLoss: document.getElementById("momentumLoss"),
+        adamLoss: document.getElementById("adamLoss"),
+        surfaceName: document.getElementById("surfaceName")
+      };
+
+      const COLORS = {
+        sgd: 0x4cc9f0,
+        momentum: 0xffb454,
+        adam: 0x55d187
+      };
+
+      const surfaceNames = {
+        rosenbrock: "Rosenbrock",
+        himmelblau: "Himmelblau",
+        rastrigin: "Rastrigin",
+        ackley: "Ackley"
+      };
+
+      function loss(x, y) {
+        switch (ui.surface.value) {
+          case "himmelblau": {
+            const a = x * x + y - 11;
+            const b = x + y * y - 7;
+            return a * a + b * b;
+          }
+          case "rastrigin":
+            return 20 + x * x + y * y - 10 * (Math.cos(2 * Math.PI * x) + Math.cos(2 * Math.PI * y));
+          case "ackley": {
+            const a = -20 * Math.exp(-0.2 * Math.sqrt(0.5 * (x * x + y * y)));
+            const b = -Math.exp(0.5 * (Math.cos(2 * Math.PI * x) + Math.cos(2 * Math.PI * y)));
+            return a + b + Math.E + 20;
+          }
+          default:
+            return Math.pow(1 - x, 2) + 100 * Math.pow(y - x * x, 2);
+        }
+      }
+
+      function gradient(x, y) {
+        const eps = 1e-4;
+        return [
+          (loss(x + eps, y) - loss(x - eps, y)) / (2 * eps),
+          (loss(x, y + eps) - loss(x, y - eps)) / (2 * eps)
+        ];
+      }
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x050b14);
+
+      const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
+      camera.position.set(5.8, 5.5, 6.8);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      container.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.target.set(0, 0, 0);
+
+      scene.add(new THREE.AmbientLight(0x8aa0b8, 1.2));
+      const light = new THREE.DirectionalLight(0xffffff, 1.7);
+      light.position.set(4, 8, 5);
+      scene.add(light);
+
+      const grid = new THREE.GridHelper(7, 14, 0x29435e, 0x16283b);
+      grid.position.y = -0.08;
+      scene.add(grid);
+
+      const axes = new THREE.AxesHelper(3.2);
+      scene.add(axes);
+
+      let surfaceMesh = null;
+      let simulation = null;
+      let running = true;
+      let animationFrame = null;
+
+      function finiteNumber(v, fallback) {
+        return Number.isFinite(v) ? v : fallback;
+      }
+
+      function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+      }
+
+      function makeSurface() {
+        if (surfaceMesh) {
+          scene.remove(surfaceMesh);
+          surfaceMesh.geometry.dispose();
+          surfaceMesh.material.dispose();
+        }
+
+        const size = 6.2;
+        const segments = 90;
+        const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+        const positions = geometry.attributes.position;
+        const values = [];
+
+        let minZ = Infinity;
+        let maxZ = -Infinity;
+
+        for (let i = 0; i < positions.count; i++) {
+          const x = positions.getX(i);
+          const y = positions.getY(i);
+          const raw = loss(x, y);
+          const z = Math.log1p(Math.max(0, raw));
+          values.push(z);
+          minZ = Math.min(minZ, z);
+          maxZ = Math.max(maxZ, z);
+        }
+
+        const range = Math.max(0.001, maxZ - minZ);
+
+        for (let i = 0; i < positions.count; i++) {
+          const x = positions.getX(i);
+          const y = positions.getY(i);
+          const normalized = (values[i] - minZ) / range;
+          positions.setZ(i, normalized * 2.6);
+          positions.setX(i, x);
+          positions.setY(i, y);
+        }
+
+        geometry.rotateX(-Math.PI / 2);
+        const material = new THREE.MeshStandardMaterial({
+          color: 0x16435a,
+          roughness: 0.78,
+          metalness: 0.05,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.82
+        });
+
+        surfaceMesh = new THREE.Mesh(geometry, material);
+        scene.add(surfaceMesh);
+
+        simulation.surfaceMin = minZ;
+        simulation.surfaceMax = maxZ;
+        simulation.surfaceRange = range;
+      }
+
+      function surfaceHeight(x, y) {
+        const z = Math.log1p(Math.max(0, loss(x, y)));
+        const normalized = (z - simulation.surfaceMin) / simulation.surfaceRange;
+        return clamp(normalized * 2.6, 0, 2.6);
+      }
+
+      function makePath(color) {
+        const group = new THREE.Group();
+        const lineGeometry = new THREE.BufferGeometry();
+        const lineMaterial = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 });
+        const line = new THREE.Line(lineGeometry, lineMaterial);
+        group.add(line);
+
+        const sphere = new THREE.Mesh(
+          new THREE.SphereGeometry(0.085, 16, 16),
+          new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.3 })
+        );
+        group.add(sphere);
+        scene.add(group);
+        return { group, line, sphere, points: [] };
+      }
+
+      function createSimulation() {
+        if (simulation) {
+          ["sgd", "momentum", "adam"].forEach(key => {
+            if (simulation[key]) scene.remove(simulation[key].visual.group);
+          });
+        }
+
+        simulation = {
+          step: 0,
+          sgd: {
+            p: [Number(ui.startX.value), Number(ui.startY.value)],
+            visual: makePath(COLORS.sgd),
+            losses: []
+          },
+          momentum: {
+            p: [Number(ui.startX.value), Number(ui.startY.value)],
+            v: [0, 0],
+            visual: makePath(COLORS.momentum),
+            losses: []
+          },
+          adam: {
+            p: [Number(ui.startX.value), Number(ui.startY.value)],
+            m: [0, 0],
+            v: [0, 0],
+            visual: makePath(COLORS.adam),
+            losses: []
+          },
+          surfaceMin: 0,
+          surfaceMax: 1,
+          surfaceRange: 1
+        };
+
+        makeSurface();
+        updateVisibility();
+        updateVisuals();
+        updateStats();
+        drawChart();
+      }
+
+      function safeStepSGD(state, lr) {
+        const g = gradient(state.p[0], state.p[1]);
+        const scale = Math.min(1, 50 / Math.max(1, Math.hypot(g[0], g[1])));
+        state.p[0] -= lr * g[0] * scale;
+        state.p[1] -= lr * g[1] * scale;
+        state.p[0] = clamp(finiteNumber(state.p[0], 0), -3.2, 3.2);
+        state.p[1] = clamp(finiteNumber(state.p[1], 0), -3.2, 3.2);
+      }
+
+      function safeStepMomentum(state, lr) {
+        const g = gradient(state.p[0], state.p[1]);
+        const scale = Math.min(1, 50 / Math.max(1, Math.hypot(g[0], g[1])));
+        const beta = 0.88;
+        state.v[0] = beta * state.v[0] + g[0] * scale;
+        state.v[1] = beta * state.v[1] + g[1] * scale;
+        state.p[0] -= lr * state.v[0];
+        state.p[1] -= lr * state.v[1];
+        state.p[0] = clamp(finiteNumber(state.p[0], 0), -3.2, 3.2);
+        state.p[1] = clamp(finiteNumber(state.p[1], 0), -3.2, 3.2);
+      }
+
+      function safeStepAdam(state, lr, t) {
+        const g = gradient(state.p[0], state.p[1]);
+        const scale = Math.min(1, 50 / Math.max(1, Math.hypot(g[0], g[1])));
+        const gx = g[0] * scale;
+        const gy = g[1] * scale;
+        const b1 = 0.9, b2 = 0.999, eps = 1e-8;
+
+        state.m[0] = b1 * state.m[0] + (1 - b1) * gx;
+        state.m[1] = b1 * state.m[1] + (1 - b1) * gy;
+        state.v[0] = b2 * state.v[0] + (1 - b2) * gx * gx;
+        state.v[1] = b2 * state.v[1] + (1 - b2) * gy * gy;
+
+        const mh0 = state.m[0] / (1 - Math.pow(b1, t));
+        const mh1 = state.m[1] / (1 - Math.pow(b1, t));
+        const vh0 = state.v[0] / (1 - Math.pow(b2, t));
+        const vh1 = state.v[1] / (1 - Math.pow(b2, t));
+
+        state.p[0] -= lr * mh0 / (Math.sqrt(vh0) + eps);
+        state.p[1] -= lr * mh1 / (Math.sqrt(vh1) + eps);
+
+        state.p[0] = clamp(finiteNumber(state.p[0], 0), -3.2, 3.2);
+        state.p[1] = clamp(finiteNumber(state.p[1], 0), -3.2, 3.2);
+      }
+
+      function addPoint(state) {
+        const x = state.p[0];
+        const y = state.p[1];
+        const z = surfaceHeight(x, y) + 0.055;
+        state.visual.points.push(new THREE.Vector3(x, z, y));
+        if (state.visual.points.length > 180) state.visual.points.shift();
+      }
+
+      function updateVisuals() {
+        ["sgd", "momentum", "adam"].forEach(key => {
+          const state = simulation[key];
+          const positions = new Float32Array(state.visual.points.length * 3);
+          state.visual.points.forEach((p, i) => {
+            positions[i * 3] = p.x;
+            positions[i * 3 + 1] = p.y;
+            positions[i * 3 + 2] = p.z;
+          });
+          state.visual.line.geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+          state.visual.line.geometry.computeBoundingSphere();
+
+          const p = state.p;
+          state.visual.sphere.position.set(p[0], surfaceHeight(p[0], p[1]) + 0.08, p[1]);
+        });
+      }
+
+      function stepOnce() {
+        const lr = Number(ui.lr.value);
+        simulation.step += 1;
+
+        if (ui.sgd.checked) {
+          safeStepSGD(simulation.sgd, lr);
+          simulation.sgd.losses.push(Math.log1p(Math.max(0, loss(...simulation.sgd.p))));
+          addPoint(simulation.sgd);
+        }
+        if (ui.momentum.checked) {
+          safeStepMomentum(simulation.momentum, lr);
+          simulation.momentum.losses.push(Math.log1p(Math.max(0, loss(...simulation.momentum.p))));
+          addPoint(simulation.momentum);
+        }
+        if (ui.adam.checked) {
+          safeStepAdam(simulation.adam, lr, simulation.step);
+          simulation.adam.losses.push(Math.log1p(Math.max(0, loss(...simulation.adam.p))));
+          addPoint(simulation.adam);
+        }
+
+        updateVisuals();
+        updateStats();
+        drawChart();
+      }
+
+      function updateStats() {
+        ui.iteration.textContent = String(simulation.step);
+
+        const losses = [];
+        const values = {
+          sgd: loss(...simulation.sgd.p),
+          momentum: loss(...simulation.momentum.p),
+          adam: loss(...simulation.adam.p)
+        };
+
+        if (ui.sgd.checked) losses.push(values.sgd);
+        if (ui.momentum.checked) losses.push(values.momentum);
+        if (ui.adam.checked) losses.push(values.adam);
+
+        const safe = v => Number.isFinite(v) ? v : Infinity;
+        const best = losses.length ? Math.min(...losses.map(safe)) : Infinity;
+
+        ui.sgdLoss.textContent = ui.sgd.checked ? formatLoss(values.sgd) : "Off";
+        ui.momentumLoss.textContent = ui.momentum.checked ? formatLoss(values.momentum) : "Off";
+        ui.adamLoss.textContent = ui.adam.checked ? formatLoss(values.adam) : "Off";
+        ui.bestLoss.textContent = Number.isFinite(best) ? formatLoss(best) : "—";
+      }
+
+      function formatLoss(v) {
+        if (!Number.isFinite(v)) return "—";
+        if (v >= 1000) return v.toExponential(2);
+        return v.toFixed(3);
+      }
+
+      function updateVisibility() {
+        simulation.sgd.visual.group.visible = ui.sgd.checked;
+        simulation.momentum.visual.group.visible = ui.momentum.checked;
+        simulation.adam.visual.group.visible = ui.adam.checked;
+      }
+
+      function drawChart() {
+        const w = chart.clientWidth || 1000;
+        const h = chart.clientHeight || 220;
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        chart.width = w * dpr;
+        chart.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.fillStyle = "#07111d";
+        ctx.fillRect(0, 0, w, h);
+
+        const pad = { l: 42, r: 18, t: 16, b: 30 };
+        const pw = w - pad.l - pad.r;
+        const ph = h - pad.t - pad.b;
+
+        ctx.strokeStyle = "#1b3149";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+          const y = pad.t + ph * i / 4;
+          ctx.beginPath();
+          ctx.moveTo(pad.l, y);
+          ctx.lineTo(w - pad.r, y);
+          ctx.stroke();
+        }
+
+        const series = [
+          { key: "sgd", color: "#4cc9f0", data: simulation.sgd.losses, enabled: ui.sgd.checked },
+          { key: "momentum", color: "#ffb454", data: simulation.momentum.losses, enabled: ui.momentum.checked },
+          { key: "adam", color: "#55d187", data: simulation.adam.losses, enabled: ui.adam.checked }
+        ];
+
+        let max = 1;
+        series.forEach(s => s.data.forEach(v => { if (Number.isFinite(v)) max = Math.max(max, v); }));
+        const min = 0;
+
+        ctx.fillStyle = "#7e93aa";
+        ctx.font = "11px system-ui";
+        ctx.fillText("loss", 10, 16);
+        ctx.fillText("iteration", w - 65, h - 8);
+
+        series.forEach(s => {
+          if (!s.enabled || s.data.length === 0) return;
+          ctx.strokeStyle = s.color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+
+          s.data.forEach((v, i) => {
+            const x = pad.l + (i / Math.max(1, s.data.length - 1)) * pw;
+            const y = pad.t + ph - ((v - min) / Math.max(0.001, max - min)) * ph;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+        });
+      }
+
+      function reset() {
+        createSimulation();
+      }
+
+      function syncLabels() {
+        ui.lrValue.textContent = Number(ui.lr.value).toFixed(3);
+        ui.xValue.textContent = Number(ui.startX.value).toFixed(2);
+        ui.yValue.textContent = Number(ui.startY.value).toFixed(2);
+        ui.speedValue.textContent = ui.speed.value + "×";
+        ui.surfaceName.textContent = surfaceNames[ui.surface.value];
+      }
+
+      ui.surface.addEventListener("change", () => {
+        syncLabels();
+        reset();
+      });
+      ui.lr.addEventListener("input", syncLabels);
+      ui.startX.addEventListener("input", () => { syncLabels(); reset(); });
+      ui.startY.addEventListener("input", () => { syncLabels(); reset(); });
+      ui.speed.addEventListener("input", syncLabels);
+      [ui.sgd, ui.momentum, ui.adam].forEach(el => el.addEventListener("change", updateVisibility));
+
+      ui.play.addEventListener("click", () => {
+        running = !running;
+        ui.play.textContent = running ? "Pause" : "Play";
+      });
+
+      ui.step.addEventListener("click", () => {
+        if (!simulation) createSimulation();
+        stepOnce();
+      });
+
+      ui.reset.addEventListener("click", reset);
+
+      window.addEventListener("resize", () => {
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        camera.aspect = width / Math.max(1, height);
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
+        drawChart();
+      });
+
+      function animate() {
+        animationFrame = requestAnimationFrame(animate);
+        if (running && simulation) {
+          const count = Math.max(1, Number(ui.speed.value));
+          for (let i = 0; i < count; i++) stepOnce();
+        }
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      syncLabels();
+      createSimulation();
+      animate();
+    })();
+  </script>
+</body>
+</html>
